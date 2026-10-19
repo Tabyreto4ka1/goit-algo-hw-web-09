@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from json import dump
+import time
 
 def quotes_parser(soup):            #Парсинг для цитат
     tags_all=soup.find_all("div", class_="tags")
@@ -10,7 +11,7 @@ def quotes_parser(soup):            #Парсинг для цитат
         tags.append(tags_one_text)
     authors=[author.text for author  in soup.find_all("small", class_="author")]
     quotes=[quote.text for quote in soup.find_all("span", class_="text")]
-    quotes_json=[{"tags":t, "author": a, "quotes": q} for t,a,q in zip(tags, authors, quotes)]
+    quotes_json=[{"tags":t, "author": a, "quote": q} for t,a,q in zip(tags, authors, quotes)]
     return(quotes_json)
 
 def quotes(url):        #Переходи на іншу сторнінку та збирання усіх цитат в одн список
@@ -31,11 +32,9 @@ def quotes(url):        #Переходи на іншу сторнінку та 
 
 def authors_parser(soup, cache):        #парсинг авторів
     fullname=soup.find("h3", class_="author-title").text
-    if fullname in cache:   #Якщо у кеші, де зберігаютсья імена авторів є автор, то просто повертаємо пустий словник, щоб не виконувати функцію далі
-        return {}
     born_date=soup.find("span", class_="author-born-date").text
     born_location=soup.find("span", class_="author-born-location").text
-    description=soup.find("div", class_="author-description").text[:50].strip() #Для опису робимо максимум 50 символів, заради оптимізації
+    description=soup.find("div", class_="author-description").text.strip() #Для опису робимо максимум 50 символів, заради оптимізації
     author_json={"fullname": fullname,"born_date": born_date, "born_location": born_location, "description": description }
 
     return author_json
@@ -51,14 +50,14 @@ def authors(url):
         authors_all=soup.find_all("small", class_="author")
 
         for author in authors_all:  #знаходимо відносний шлях до кожного автору і збраємо в абсолютний
-            author_rel_url=author.find_next("a")["href"]    
-            author_request=requests.get(url+author_rel_url)
-            author_soup=BeautifulSoup(author_request.text, "lxml")
-            author_json=authors_parser(author_soup, author_cache)
-            if len(author_json) != 4:   #Якщо парсер авторів поверне пустий словник, то е додаємо автора, бо він уже існує 
+            if author.text in author_cache:
                 pass
             else:
-                author_cache.append(author_json["fullname"])
+                author_cache.append(author.text)
+                author_rel_url=author.find_next("a")["href"]    
+                author_request=requests.get(url+author_rel_url)
+                author_soup=BeautifulSoup(author_request.text, "lxml")
+                author_json=authors_parser(author_soup, author_cache)
                 authors_json.append(author_json)
         try:            #перехід на наступну сторінку
             next=soup.find("li", class_="next").find_next("a")["href"]
